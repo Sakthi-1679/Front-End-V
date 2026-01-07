@@ -1,15 +1,27 @@
 
 import { User, Product, Order, CustomOrder, UserRole, OrderStatus, AuthResponse } from '../types';
 
-// Use relative path '/api' by default. 
-// In Development: vite.config.ts proxies this to http://localhost:3001
-// In Production: vercel.json rewrites this to the server function
-const API_URL = (import.meta as any).env?.VITE_API_URL || '/api';
+// Robust API_URL determination
+const getApiUrl = () => {
+    // 1. If env var is set, use it (e.g. production build specific)
+    if ((import.meta as any).env?.VITE_API_URL) {
+        return (import.meta as any).env.VITE_API_URL;
+    }
+    
+    // 2. If running on localhost, prefer direct connection to backend port 3001
+    // This solves issues where Vite Proxy isn't running (e.g. vite preview) or fails (405 on static server)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3001/api';
+    }
+
+    // 3. Fallback to relative path (assumes same-origin hosting or proxy)
+    return '/api';
+};
+
+const API_URL = getApiUrl();
 
 const apiRequest = async (endpoint: string, method: string = 'GET', body?: any) => {
   // Construct full URL.
-  // If API_URL is relative (/api), valid for proxy/same-origin.
-  // If API_URL is absolute, uses that.
   const fullUrl = `${API_URL}${endpoint}`;
 
   try {
