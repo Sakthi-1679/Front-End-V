@@ -109,6 +109,10 @@ export const addProduct = async (product: Omit<Product, 'id'>): Promise<Product>
   return await apiRequest('/products', 'POST', product);
 };
 
+export const updateProduct = async (id: string, product: Partial<Product>): Promise<Product> => {
+  return await apiRequest(`/products/${id}`, 'PUT', product);
+};
+
 export const deleteProduct = async (id: string): Promise<void> => {
   await apiRequest(`/products/${id}`, 'DELETE');
 };
