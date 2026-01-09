@@ -11,7 +11,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { CustomOrderForm } from './pages/CustomOrder';
 import { UserRole, OrderStatus } from './types';
 import { getUserOrders, getUserCustomOrders, getAdminContact } from './services/storage';
-import { Package, ShoppingBag, Clock, FileText, Phone } from 'lucide-react';
+import { Package, ShoppingBag, Clock, FileText, Phone, X, ZoomIn } from 'lucide-react';
 
 const StatusBadge = ({ status }: { status: OrderStatus }) => {
   const colors = {
@@ -28,6 +28,7 @@ const History: React.FC = () => {
   const [orders, setOrders] = React.useState<any[]>([]);
   const [customOrders, setCustomOrders] = React.useState<any[]>([]);
   const [adminPhone, setAdminPhone] = React.useState('');
+  const [lightboxImage, setLightboxImage] = React.useState<string | null>(null);
 
   const load = async () => {
     if (user) {
@@ -161,7 +162,9 @@ const History: React.FC = () => {
                  {o.images && o.images.length > 0 && (
                    <div className="flex -space-x-2 overflow-hidden py-1 mb-3">
                      {o.images.map((img: string, i: number) => (
-                       <img key={i} className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover shadow-sm" src={img} alt=""/>
+                       <div key={i} className="relative group cursor-pointer" onClick={() => setLightboxImage(img)}>
+                         <img className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover shadow-sm transition-transform hover:scale-110 hover:z-10" src={img} alt=""/>
+                       </div>
                      ))}
                    </div>
                  )}
@@ -174,6 +177,16 @@ const History: React.FC = () => {
           </div>
         )}
       </section>
+
+      {/* Lightbox for Custom Order Images */}
+      {lightboxImage && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setLightboxImage(null)}>
+          <button className="absolute top-4 right-4 text-white hover:text-gray-300">
+            <X className="h-8 w-8" />
+          </button>
+          <img src={lightboxImage} alt="Full size" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-scale-up" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 };
