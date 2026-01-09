@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, Order, OrderStatus, User, CustomOrder } from '../types';
 import { 
-  getProducts, addProduct, deleteProduct, 
+  getProducts, addProduct, updateProduct, deleteProduct, 
   getAllOrders, updateOrderStatus,
   deleteOrder,
   getAdminContact, updateAdminContact,
@@ -10,7 +10,7 @@ import {
   getAllCustomOrders, deleteCustomOrder
 } from '../services/storage';
 import { useNotification } from '../context/NotificationContext';
-import { Plus, Trash2, Clock, Upload, X, Bell, Phone, User as UserIcon, MapPin, FileText, CheckCircle2, AlertCircle, ShoppingBag, ListChecks, Sparkles, Loader2, FileDigit } from 'lucide-react';
+import { Plus, Trash2, Clock, Upload, X, Bell, Phone, User as UserIcon, MapPin, FileText, CheckCircle2, AlertCircle, ShoppingBag, ListChecks, Sparkles, Loader2, FileDigit, Pencil, Ban } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'custom'>('products');
@@ -18,6 +18,7 @@ export const AdminDashboard: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customOrders, setCustomOrders] = useState<CustomOrder[]>([]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [pendingCustomCount, setPendingCustomCount] = useState(0);
@@ -76,7 +77,7 @@ export const AdminDashboard: React.FC = () => {
     });
   };
 
-  const handleAddProduct = async (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!newProd.title || newProd.price === undefined || newProd.durationHours === undefined) {
@@ -86,7 +87,7 @@ export const AdminDashboard: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const productToAdd = {
+      const productData = {
         title: newProd.title,
         description: newProd.description || '',
         price: Number(newProd.price),
@@ -96,16 +97,35 @@ export const AdminDashboard: React.FC = () => {
           : ['https://images.unsplash.com/photo-1522673607200-164883524354?auto=format&fit=crop&q=80&w=800']
       };
       
-      await addProduct(productToAdd as Product);
-      setIsAddingProduct(false);
-      setNewProd({ title: '', price: 0, durationHours: 0, description: '', images: [] });
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, productData);
+        notify("Product updated successfully!", "success");
+      } else {
+        await addProduct(productData as Product);
+        notify("Product added to catalog!", "success");
+      }
+      
+      resetForm();
       await loadData();
-      notify("Product added to catalog!", "success");
     } catch (err: any) {
       notify(`Error: ${err.message}`, "error");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const resetForm = () => {
+    setIsAddingProduct(false);
+    setEditingProduct(null);
+    setNewProd({ title: '', price: 0, durationHours: 0, description: '', images: [] });
+  };
+
+  const startEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setNewProd({ ...product });
+    setIsAddingProduct(true);
+    // Scroll to top to see form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -337,15 +357,17 @@ export const AdminDashboard: React.FC = () => {
         <div className="space-y-6 sm:space-y-8 animate-fade-in px-2 sm:px-0">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 sm:px-2">
             <h2 className="text-xl sm:text-2xl font-black flex items-center gap-3 text-gray-900"><ShoppingBag className="h-6 w-6 sm:h-7 sm:w-7 text-indigo-500" /> Product Listings</h2>
-            <button onClick={() => setIsAddingProduct(!isAddingProduct)} className="w-full sm:w-auto bg-gray-900 text-white px-6 py-3 rounded-2xl flex items-center justify-center gap-2 shadow-xl hover:shadow-gray-200 transition-all active:scale-95 font-black uppercase text-[10px] sm:text-xs tracking-widest">
-              <Plus className="h-5 w-5" /> {isAddingProduct ? "Collapse Form" : "Add New Item"}
+            <button onClick={() => { setIsAddingProduct(!isAddingProduct); if(isAddingProduct) resetForm(); }} className="w-full sm:w-auto bg-gray-900 text-white px-6 py-3 rounded-2xl flex items-center justify-center gap-2 shadow-xl hover:shadow-gray-200 transition-all active:scale-95 font-black uppercase text-[10px] sm:text-xs tracking-widest">
+              {isAddingProduct ? <><Ban className="h-5 w-5" /> Cancel</> : <><Plus className="h-5 w-5" /> Add New Item</>}
             </button>
           </div>
 
           {isAddingProduct && (
             <div className="bg-white p-6 sm:p-10 rounded-3xl shadow-2xl border border-indigo-50 animate-fade-in">
-              <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-6 sm:mb-8 border-b pb-4">Product Form</h3>
-              <form onSubmit={handleAddProduct} className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+              <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-6 sm:mb-8 border-b pb-4">
+                 {editingProduct ? 'Update Product' : 'New Product Form'}
+              </h3>
+              <form onSubmit={handleSaveProduct} className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
                 <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Product Name</label>
                     <input className="w-full border-2 border-gray-100 p-3 sm:p-4 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none bg-gray-50 font-bold" value={newProd.title} onChange={e => setNewProd({...newProd, title: e.target.value})} required />
@@ -387,9 +409,9 @@ export const AdminDashboard: React.FC = () => {
                     <textarea rows={4} className="w-full border-2 border-gray-100 p-3 sm:p-4 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none bg-gray-50 font-bold transition-all resize-none" value={newProd.description} onChange={e => setNewProd({...newProd, description: e.target.value})} required />
                 </div>
                 <div className="md:col-span-2 flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 pt-6">
-                  <button type="button" onClick={() => setIsAddingProduct(false)} className="px-8 py-3.5 text-gray-500 font-black hover:bg-gray-100 rounded-2xl uppercase tracking-[0.2em] text-[10px]">Cancel</button>
+                  <button type="button" onClick={resetForm} className="px-8 py-3.5 text-gray-500 font-black hover:bg-gray-100 rounded-2xl uppercase tracking-[0.2em] text-[10px]">Cancel</button>
                   <button type="submit" disabled={isSubmitting} className="px-10 py-3.5 bg-indigo-600 text-white font-black rounded-2xl shadow-2xl hover:bg-indigo-700 uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-2">
-                    {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</> : "Save Item"}
+                    {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</> : (editingProduct ? "Update Item" : "Save Item")}
                   </button>
                 </div>
               </form>
@@ -407,9 +429,12 @@ export const AdminDashboard: React.FC = () => {
                 <div key={p.id} className="bg-white rounded-[24px] sm:rounded-[32px] shadow-sm hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-100 group flex flex-col h-full">
                   <div className="relative h-48 sm:h-64 bg-gray-100 overflow-hidden">
                     <img src={p.images[0]} alt={p.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end p-4 sm:p-6">
-                       <button onClick={(e) => handleDeleteProduct(e, p.id)} className="bg-red-600/95 backdrop-blur-md text-white w-full py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-red-600 transition-all uppercase tracking-widest text-[9px] sm:text-[10px] shadow-xl">
-                          <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" /> Remove Item
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end p-4 sm:p-6 gap-2">
+                       <button onClick={(e) => { e.stopPropagation(); startEditProduct(p); }} className="bg-white/95 backdrop-blur-md text-gray-900 flex-1 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-white transition-all uppercase tracking-widest text-[9px] sm:text-[10px] shadow-xl">
+                          <Pencil className="h-4 w-4 sm:h-5 sm:w-5" /> Edit
+                       </button>
+                       <button onClick={(e) => handleDeleteProduct(e, p.id)} className="bg-red-600/95 backdrop-blur-md text-white w-12 sm:w-14 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black flex items-center justify-center hover:bg-red-600 transition-all shadow-xl">
+                          <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
                        </button>
                     </div>
                     <div className="absolute top-3 right-3 sm:top-5 sm:right-5 bg-white/95 backdrop-blur-md text-gray-900 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl text-[8px] sm:text-[10px] font-black shadow-xl flex items-center gap-2 border border-gray-100">
