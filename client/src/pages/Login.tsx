@@ -7,8 +7,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { UserRole } from '../types';
 import { ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
-const ADMIN_EMAIL = (import.meta as any).env?.VITE_ADMIN_EMAIL as string | undefined;
-const ADMIN_PASSWORD = (import.meta as any).env?.VITE_ADMIN_PASSWORD as string | undefined;
+const ADMIN_EMAIL: string = (import.meta as any).env?.VITE_ADMIN_EMAIL || 'vkmflowerskpm@gmail.com';
+const ADMIN_PASSWORD: string = (import.meta as any).env?.VITE_ADMIN_PASSWORD || 'vkm@admin';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -90,8 +90,7 @@ export const Login: React.FC = () => {
       </div>
 
       {/* Admin Quick Access */}
-      {ADMIN_EMAIL && ADMIN_PASSWORD && (
-        <div className="mt-8 pt-8 border-t border-gray-100">
+      <div className="mt-8 pt-8 border-t border-gray-100">
           <div className="bg-indigo-50 border border-indigo-100 rounded-[24px] p-5">
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck className="h-4 w-4 text-indigo-600" />
@@ -106,7 +105,7 @@ export const Login: React.FC = () => {
                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Password</span>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-bold text-gray-700 font-mono">
-                    {showAdminPass ? ADMIN_PASSWORD : '•'.repeat(ADMIN_PASSWORD?.length ?? 0)}
+                    {showAdminPass ? ADMIN_PASSWORD : '•'.repeat(ADMIN_PASSWORD.length)}
                   </span>
                   <button
                     type="button"
@@ -129,7 +128,6 @@ export const Login: React.FC = () => {
             </button>
           </div>
         </div>
-      )}
     </div>
   );
 };
