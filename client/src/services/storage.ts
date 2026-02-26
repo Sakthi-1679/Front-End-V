@@ -75,14 +75,23 @@ const ADMIN_FALLBACK: AuthResponse = {
 
 // Auth
 export const login = async (email: string, password: string): Promise<AuthResponse> => {
-  // Client-side admin quick access — works without a backend
-  if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-    localStorage.setItem('vkm_session', JSON.stringify(ADMIN_FALLBACK));
-    return ADMIN_FALLBACK;
+  try {
+    // Try the real backend first so admin operations get a valid JWT
+    const data = await apiRequest('/login', 'POST', { email, password });
+    localStorage.setItem('vkm_session', JSON.stringify(data));
+    return data;
+  } catch (err: any) {
+    // If the backend is unreachable (network error / non-JSON response),
+    // fall back to the client-side admin session so the UI still works.
+    // Network errors have no status code; apiRequest throws with a message starting "Non-JSON" or
+    // wraps a TypeError (failed to fetch). Distinguish from backend auth errors (401/403).
+    const isNetworkError = err instanceof TypeError || err.message?.startsWith('Non-JSON Error');
+    if (isNetworkError && email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      localStorage.setItem('vkm_session', JSON.stringify(ADMIN_FALLBACK));
+      return ADMIN_FALLBACK;
+    }
+    throw err;
   }
-  const data = await apiRequest('/login', 'POST', { email, password });
-  localStorage.setItem('vkm_session', JSON.stringify(data));
-  return data;
 };
 
 export const register = async (userData: any): Promise<AuthResponse> => {

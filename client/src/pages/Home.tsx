@@ -4,7 +4,7 @@ import { Product, UserRole } from '../types';
 import { getProducts, placeOrder, getAdminContact } from '../services/storage';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { Search, ShoppingCart, Clock, Info, ShieldAlert, Loader2, Flower, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ShoppingCart, Clock, Info, ShieldAlert, Loader2, Flower, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Home: React.FC = () => {
@@ -15,6 +15,7 @@ export const Home: React.FC = () => {
   const [orderQty, setOrderQty] = useState(1);
   const [orderNote, setOrderNote] = useState('');
   const [loading, setLoading] = useState(true);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const { isAuthenticated, user } = useAuth();
   const { notify } = useNotification();
   const navigate = useNavigate();
@@ -131,8 +132,9 @@ export const Home: React.FC = () => {
                 <img 
                   src={product.images && product.images.length > 0 ? product.images[0] : 'https://via.placeholder.com/300?text=No+Image'} 
                   alt={product.title} 
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                />
+                  className="absolute inset-0 w-full h-full object-cover cursor-pointer" 
+                  onClick={() => { if (product.images && product.images.length > 0) setLightboxImage(product.images[0]); }}
+                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[10px] md:text-xs font-black text-gray-700 flex items-center gap-1 shadow-sm">
                    <Clock className="h-3 w-3" /> {product.durationHours}h
@@ -235,6 +237,15 @@ export const Home: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {lightboxImage && (
+        <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in" onClick={() => setLightboxImage(null)}>
+          <button className="absolute top-4 right-4 text-white hover:text-gray-300 z-10">
+            <X className="h-8 w-8" />
+          </button>
+          <img src={lightboxImage} alt="Full size" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
