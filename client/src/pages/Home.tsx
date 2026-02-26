@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { Product, UserRole } from '../types';
 import { getProducts, placeOrder, getAdminContact } from '../services/storage';
+import { sendOrderConfirmationEmail } from '../services/brevo';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { Search, ShoppingCart, Clock, Info, ShieldAlert, Loader2, Flower, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ShoppingCart, Clock, Info, ShieldAlert, Loader2, Flower, ChevronLeft, ChevronRight, ZoomIn, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Home: React.FC = () => {
@@ -15,6 +16,7 @@ export const Home: React.FC = () => {
   const [orderQty, setOrderQty] = useState(1);
   const [orderNote, setOrderNote] = useState('');
   const [loading, setLoading] = useState(true);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const { isAuthenticated, user } = useAuth();
   const { notify } = useNotification();
   const navigate = useNavigate();
@@ -56,7 +58,7 @@ export const Home: React.FC = () => {
   const submitOrder = async () => {
     if (!selectedProduct || !user) return;
     try {
-      await placeOrder({
+      const order = await placeOrder({
         userId: user.id,
         productId: selectedProduct.id,
         quantity: orderQty,
@@ -65,6 +67,18 @@ export const Home: React.FC = () => {
       const adminPhone = await getAdminContact();
       notify(`Order placed! Contact us at ${adminPhone} for payment details.`, "success");
       setSelectedProduct(null);
+      // Send Brevo confirmation email (non-blocking)
+      sendOrderConfirmationEmail(
+        { email: user.email, name: user.name },
+        {
+          id: order.id,
+          productTitle: order.productTitle || selectedProduct.title,
+          quantity: orderQty,
+          totalPrice: order.totalPrice || selectedProduct.price * orderQty,
+          description: orderNote || undefined,
+        },
+        adminPhone
+      );
     } catch (e) {
       notify('Failed to place order. Please check your connection.', 'error');
     }
@@ -131,9 +145,19 @@ export const Home: React.FC = () => {
                 <img 
                   src={product.images && product.images.length > 0 ? product.images[0] : 'https://via.placeholder.com/300?text=No+Image'} 
                   alt={product.title} 
+                  loading="lazy"
                   className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                {/* Zoom button on hover */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setZoomedImage(product.images?.[0] || null); }}
+                  className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                  title="Zoom image"
+                >
+                  <ZoomIn className="h-3.5 w-3.5 text-gray-700" />
+                </button>
                 <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full text-[10px] md:text-xs font-black text-gray-700 flex items-center gap-1 shadow-sm">
                    <Clock className="h-3 w-3" /> {product.durationHours}h
                 </div>
@@ -182,8 +206,13 @@ export const Home: React.FC = () => {
                   <img 
                     src={selectedProduct.images[activeImageIndex]} 
                     alt={selectedProduct.title} 
-                    className="w-full h-64 md:h-full object-cover"
+                    className="w-full h-64 md:h-full object-cover cursor-zoom-in"
+                    onClick={() => setZoomedImage(selectedProduct.images[activeImageIndex])}
                   />
+                  {/* Zoom hint */}
+                  <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 opacity-70 pointer-events-none">
+                    <ZoomIn className="h-3 w-3" /> Tap to zoom
+                  </div>
                   {selectedProduct.images.length > 1 && (
                     <>
                       <button onClick={prevImage} className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 bg-white/80 p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"><ChevronLeft className="h-5 w-5" /></button>
@@ -235,6 +264,27 @@ export const Home: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Full-screen zoom lightbox ── */}
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4 cursor-zoom-out animate-fade-in"
+          onClick={() => setZoomedImage(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+            onClick={() => setZoomedImage(null)}
+          >
+            <X className="h-8 w-8" />
+          </button>
+          <img
+            src={zoomedImage}
+            alt="Zoomed view"
+            className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl animate-scale-up select-none"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

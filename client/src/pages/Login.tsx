@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { login } from '../services/storage';
@@ -9,9 +9,16 @@ import { UserRole } from '../types';
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { loginUser } = useAuth();
+  const { loginUser, isAuthenticated, user } = useAuth();
   const { notify } = useNotification();
   const navigate = useNavigate();
+
+  // Auto-redirect if already logged in (persistent session from localStorage)
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(user?.role === UserRole.ADMIN ? '/admin' : '/', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
