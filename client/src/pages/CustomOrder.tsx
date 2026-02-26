@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { placeCustomOrder, getAdminContact } from '../services/storage';
+import { sendCustomOrderConfirmationEmail } from '../services/brevo';
 import { useNavigate } from 'react-router-dom';
 import { Upload, Calendar, Clock, User as UserIcon, Phone, FileText, X, Loader2 } from 'lucide-react';
 
@@ -60,7 +61,7 @@ export const CustomOrderForm: React.FC = () => {
 
     setLoading(true);
     try {
-      await placeCustomOrder({
+      const order = await placeCustomOrder({
         userId: user!.id,
         ...formData,
         images: images 
@@ -68,6 +69,18 @@ export const CustomOrderForm: React.FC = () => {
       const adminPhone = await getAdminContact();
       notify(`Custom request submitted! Support: ${adminPhone}`, "success");
       navigate('/history');
+      // Send Brevo confirmation email (non-blocking)
+      sendCustomOrderConfirmationEmail(
+        { email: user!.email, name: user!.name },
+        {
+          id: order.id,
+          description: formData.description,
+          requestedDate: formData.requestedDate,
+          requestedTime: formData.requestedTime,
+          contactName: formData.contactName,
+        },
+        adminPhone
+      );
     } catch (err: any) {
       notify(`Submission failed: ${err.message}`, "error");
     } finally {
