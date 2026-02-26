@@ -72,10 +72,15 @@ export const Login: React.FC = () => {
         <Link to="/signup" className="text-indigo-600 hover:text-indigo-500 font-black text-xs uppercase tracking-widest underline decoration-2 underline-offset-4">Sign Up</Link>
       </div>
 
-      <div className="mt-8 pt-8 border-t border-gray-50 text-center">
-        <p className="text-[10px] text-gray-400 font-bold uppercase leading-relaxed px-4">
-          Securely managed by VKM Flower Shop Systems
-        </p>
+      <div className="mt-8 pt-8 border-t border-gray-100">
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 text-center">Admin Quick Access</p>
+        <button
+          type="button"
+          onClick={() => { setEmail('vkmflowerskpm@gmail.com'); setPassword('vkm@admin'); }}
+          className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-3 text-xs font-bold text-gray-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+        >
+          Fill Admin Credentials
+        </button>
       </div>
     </div>
   );

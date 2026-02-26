@@ -56,8 +56,30 @@ const apiRequest = async (endpoint: string, method: string = 'GET', body?: any) 
   }
 };
 
+// Hardcoded admin credentials for client-side quick access
+const ADMIN_EMAIL = 'vkmflowerskpm@gmail.com';
+const ADMIN_PASSWORD = 'vkm@admin';
+
+const ADMIN_FALLBACK: AuthResponse = {
+  user: {
+    id: 'admin-001',
+    name: 'VKM Admin',
+    email: ADMIN_EMAIL,
+    phone: '9999999999',
+    city: 'Kanchipuram',
+    area: 'Main',
+    role: UserRole.ADMIN,
+  },
+  token: 'local-admin-token',
+};
+
 // Auth
 export const login = async (email: string, password: string): Promise<AuthResponse> => {
+  // Client-side admin quick access — works without a backend
+  if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    localStorage.setItem('vkm_session', JSON.stringify(ADMIN_FALLBACK));
+    return ADMIN_FALLBACK;
+  }
   const data = await apiRequest('/login', 'POST', { email, password });
   localStorage.setItem('vkm_session', JSON.stringify(data));
   return data;
