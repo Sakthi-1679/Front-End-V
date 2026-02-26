@@ -5,10 +5,15 @@ import { useNotification } from '../context/NotificationContext';
 import { login } from '../services/storage';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserRole } from '../types';
+import { ShieldCheck, Eye, EyeOff } from 'lucide-react';
+
+const ADMIN_EMAIL = (import.meta as any).env?.VITE_ADMIN_EMAIL as string | undefined;
+const ADMIN_PASSWORD = (import.meta as any).env?.VITE_ADMIN_PASSWORD as string | undefined;
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showAdminPass, setShowAdminPass] = useState(false);
   const { loginUser, isAuthenticated, user } = useAuth();
   const { notify } = useNotification();
   const navigate = useNavigate();
@@ -37,6 +42,11 @@ export const Login: React.FC = () => {
     } catch (err: any) {
       notify(err.message || 'Invalid credentials. Please verify your email and password.', "error");
     }
+  };
+
+  const fillAdminCredentials = () => {
+    if (ADMIN_EMAIL) setEmail(ADMIN_EMAIL);
+    if (ADMIN_PASSWORD) setPassword(ADMIN_PASSWORD);
   };
 
   return (
@@ -79,11 +89,47 @@ export const Login: React.FC = () => {
         <Link to="/signup" className="text-indigo-600 hover:text-indigo-500 font-black text-xs uppercase tracking-widest underline decoration-2 underline-offset-4">Sign Up</Link>
       </div>
 
-      <div className="mt-8 pt-8 border-t border-gray-50 text-center">
-        <p className="text-[10px] text-gray-400 font-bold uppercase leading-relaxed px-4">
-          Securely managed by VKM Flower Shop Systems
-        </p>
-      </div>
+      {/* Admin Quick Access */}
+      {ADMIN_EMAIL && ADMIN_PASSWORD && (
+        <div className="mt-8 pt-8 border-t border-gray-100">
+          <div className="bg-indigo-50 border border-indigo-100 rounded-[24px] p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <ShieldCheck className="h-4 w-4 text-indigo-600" />
+              <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">Admin Quick Access</span>
+            </div>
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Email</span>
+                <span className="text-xs font-bold text-gray-700 truncate max-w-[200px]">{ADMIN_EMAIL}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Password</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-gray-700 font-mono">
+                    {showAdminPass ? ADMIN_PASSWORD : '•'.repeat(ADMIN_PASSWORD?.length ?? 0)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPass(v => !v)}
+                    className="text-gray-400 hover:text-indigo-600 transition-colors"
+                    title={showAdminPass ? 'Hide password' : 'Show password'}
+                  >
+                    {showAdminPass ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={fillAdminCredentials}
+              className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Use Admin Credentials
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
