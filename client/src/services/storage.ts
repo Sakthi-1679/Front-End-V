@@ -56,11 +56,42 @@ const apiRequest = async (endpoint: string, method: string = 'GET', body?: any) 
   }
 };
 
+// Hardcoded admin credentials for client-side quick access
+export const ADMIN_EMAIL = 'vkmflowerskpm@gmail.com';
+const ADMIN_PASSWORD = 'vkm@admin';
+
+const ADMIN_FALLBACK: AuthResponse = {
+  user: {
+    id: 'admin-001',
+    name: 'VKM Admin',
+    email: ADMIN_EMAIL,
+    phone: '9999999999',
+    city: 'Kanchipuram',
+    area: 'Main',
+    role: UserRole.ADMIN,
+  },
+  token: 'local-admin-token',
+};
+
 // Auth
 export const login = async (email: string, password: string): Promise<AuthResponse> => {
-  const data = await apiRequest('/login', 'POST', { email, password });
-  localStorage.setItem('vkm_session', JSON.stringify(data));
-  return data;
+  try {
+    // Try the real backend first so admin operations get a valid JWT
+    const data = await apiRequest('/login', 'POST', { email, password });
+    localStorage.setItem('vkm_session', JSON.stringify(data));
+    return data;
+  } catch (err: any) {
+    // If the backend is unreachable (network error / non-JSON response),
+    // fall back to the client-side admin session so the UI still works.
+    // Network errors have no status code; apiRequest throws with a message starting "Non-JSON" or
+    // wraps a TypeError (failed to fetch). Distinguish from backend auth errors (401/403).
+    const isNetworkError = err instanceof TypeError || err.message?.startsWith('Non-JSON Error');
+    if (isNetworkError && email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      localStorage.setItem('vkm_session', JSON.stringify(ADMIN_FALLBACK));
+      return ADMIN_FALLBACK;
+    }
+    throw err;
+  }
 };
 
 export const register = async (userData: any): Promise<AuthResponse> => {

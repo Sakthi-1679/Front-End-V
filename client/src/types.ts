@@ -43,6 +43,7 @@ export interface Order {
   status: OrderStatus;
   createdAt: string;
   expectedDeliveryAt: string;
+  emailSent?: boolean; // Whether a confirmation email was dispatched by the server
 }
 
 export interface CustomOrder {
@@ -57,6 +58,7 @@ export interface CustomOrder {
   status: OrderStatus;
   createdAt: string;
   deadlineAt: string;
+  emailSent?: boolean; // Whether a confirmation email was dispatched by the server
 }
 
 export interface AuthResponse {
