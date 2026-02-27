@@ -4,7 +4,7 @@ import { Product, UserRole } from '../types';
 import { getProducts, placeOrder, getAdminContact } from '../services/storage';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { Search, ShoppingCart, Clock, Info, ShieldAlert, Loader2, Flower, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Search, ShoppingCart, Clock, Info, ShieldAlert, Loader2, Flower, ChevronLeft, ChevronRight, X, CheckCircle2, Mail, MailX } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Home: React.FC = () => {
@@ -15,6 +15,8 @@ export const Home: React.FC = () => {
   const [orderQty, setOrderQty] = useState(1);
   const [orderNote, setOrderNote] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState<{ adminPhone: string; emailSent: boolean | undefined } | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const { isAuthenticated, user } = useAuth();
   const { notify } = useNotification();
@@ -56,19 +58,28 @@ export const Home: React.FC = () => {
 
   const submitOrder = async () => {
     if (!selectedProduct || !user) return;
+    setIsSubmitting(true);
     try {
-      await placeOrder({
+      const result = await placeOrder({
         userId: user.id,
         productId: selectedProduct.id,
         quantity: orderQty,
         description: orderNote
       });
       const adminPhone = await getAdminContact();
-      notify(`Order placed! Contact us at ${adminPhone} for payment details.`, "success");
-      setSelectedProduct(null);
+      setOrderSuccess({ adminPhone, emailSent: result.emailSent });
     } catch (e) {
       notify('Failed to place order. Please check your connection.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const closeOrderModal = () => {
+    setSelectedProduct(null);
+    setOrderSuccess(null);
+    setOrderQty(1);
+    setOrderNote('');
   };
 
   const isUserAdmin = user?.role === UserRole.ADMIN;
@@ -177,65 +188,118 @@ export const Home: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white rounded-[32px] max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh] md:max-h-[600px] animate-scale-up">
             
-            {/* Image Gallery Section */}
-            <div className="w-full md:w-1/2 bg-gray-100 relative group flex items-center justify-center">
-              {selectedProduct.images.length > 0 ? (
-                <>
-                  <img 
-                    src={selectedProduct.images[activeImageIndex]} 
-                    alt={selectedProduct.title} 
-                    className="w-full h-64 md:h-full object-cover"
-                  />
-                  {selectedProduct.images.length > 1 && (
+            {orderSuccess ? (
+              /* ── Order Success Screen ── */
+              <div className="w-full flex flex-col items-center justify-center p-8 md:p-12 text-center gap-6">
+                <div className="h-20 w-20 bg-green-50 rounded-full flex items-center justify-center shadow-inner">
+                  <CheckCircle2 className="h-10 w-10 text-green-500" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black text-gray-900 mb-1">Order Confirmed!</h3>
+                  <p className="text-gray-400 text-sm font-bold">{selectedProduct.title} — ₹{selectedProduct.price * orderQty}</p>
+                </div>
+
+                {/* Email status badge */}
+                {orderSuccess.emailSent === true && (
+                  <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 px-5 py-3 rounded-2xl w-full justify-center">
+                    <Mail className="h-5 w-5 flex-shrink-0" />
+                    <div className="text-left">
+                      <p className="text-xs font-black uppercase tracking-wider">Confirmation Email Sent</p>
+                      <p className="text-[10px] font-bold text-green-500 mt-0.5">{user?.email}</p>
+                    </div>
+                  </div>
+                )}
+                {orderSuccess.emailSent === false && (
+                  <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 text-yellow-700 px-5 py-3 rounded-2xl w-full justify-center">
+                    <MailX className="h-5 w-5 flex-shrink-0" />
+                    <div className="text-left">
+                      <p className="text-xs font-black uppercase tracking-wider">Email Could Not Be Sent</p>
+                      <p className="text-[10px] font-bold text-yellow-500 mt-0.5">Please contact us directly</p>
+                    </div>
+                  </div>
+                )}
+                {orderSuccess.emailSent === undefined && (
+                  <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 text-indigo-600 px-5 py-3 rounded-2xl w-full justify-center">
+                    <Mail className="h-5 w-5 flex-shrink-0" />
+                    <div className="text-left">
+                      <p className="text-xs font-black uppercase tracking-wider">Confirmation Email Queued</p>
+                      <p className="text-[10px] font-bold text-indigo-400 mt-0.5">{user?.email}</p>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                  Contact: <span className="text-gray-700">{orderSuccess.adminPhone}</span> for payment
+                </p>
+                <button onClick={closeOrderModal} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all active:scale-95">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Image Gallery Section */}
+                <div className="w-full md:w-1/2 bg-gray-100 relative group flex items-center justify-center">
+                  {selectedProduct.images.length > 0 ? (
                     <>
-                      <button onClick={prevImage} className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 bg-white/80 p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"><ChevronLeft className="h-5 w-5" /></button>
-                      <button onClick={nextImage} className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 bg-white/80 p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"><ChevronRight className="h-5 w-5" /></button>
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
-                        {selectedProduct.images.map((_, idx) => (
-                          <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === activeImageIndex ? 'bg-indigo-600 w-3' : 'bg-white/60'}`} />
-                        ))}
-                      </div>
+                      <img 
+                        src={selectedProduct.images[activeImageIndex]} 
+                        alt={selectedProduct.title} 
+                        className="w-full h-64 md:h-full object-cover"
+                      />
+                      {selectedProduct.images.length > 1 && (
+                        <>
+                          <button onClick={prevImage} className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 bg-white/80 p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"><ChevronLeft className="h-5 w-5" /></button>
+                          <button onClick={nextImage} className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 bg-white/80 p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"><ChevronRight className="h-5 w-5" /></button>
+                          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                            {selectedProduct.images.map((_, idx) => (
+                              <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === activeImageIndex ? 'bg-indigo-600 w-3' : 'bg-white/60'}`} />
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </>
+                  ) : (
+                    <div className="text-gray-400 flex flex-col items-center">
+                       <Info className="h-10 w-10 mb-2" />
+                       <span className="text-xs uppercase font-bold">No Image</span>
+                    </div>
                   )}
-                </>
-              ) : (
-                <div className="text-gray-400 flex flex-col items-center">
-                   <Info className="h-10 w-10 mb-2" />
-                   <span className="text-xs uppercase font-bold">No Image</span>
-                </div>
-              )}
-            </div>
-
-            {/* Details Section */}
-            <div className="w-full md:w-1/2 p-6 md:p-8 flex flex-col overflow-y-auto">
-              <h3 className="text-2xl font-black text-gray-900 mb-2 leading-tight">{selectedProduct.title}</h3>
-              <p className="text-gray-500 text-sm leading-relaxed mb-6 font-medium">{selectedProduct.description}</p>
-              
-              <div className="mt-auto space-y-6">
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Quantity</label>
-                  <input type="number" min="1" value={orderQty} onChange={(e) => setOrderQty(Math.max(1, parseInt(e.target.value)))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold focus:ring-4 focus:ring-indigo-100 outline-none transition-all" />
-                </div>
-                
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Custom Notes (Optional)</label>
-                  <textarea value={orderNote} onChange={(e) => setOrderNote(e.target.value)} rows={2} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold focus:ring-4 focus:ring-indigo-100 outline-none transition-all resize-none" placeholder="Any specific instructions..." />
                 </div>
 
-                <div className="bg-indigo-50/50 p-6 rounded-[24px] border border-indigo-100 flex flex-col items-center text-center">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-1">Total Amount</span>
-                  <span className="text-4xl font-black text-indigo-600">₹{selectedProduct.price * orderQty}</span>
-                  <div className="text-[10px] text-indigo-400 font-bold uppercase mt-2 tracking-widest flex items-center gap-1">
-                    <Clock className="h-3 w-3" /> Ready in approx. {selectedProduct.durationHours * orderQty} Hours
+                {/* Details Section */}
+                <div className="w-full md:w-1/2 p-6 md:p-8 flex flex-col overflow-y-auto">
+                  <h3 className="text-2xl font-black text-gray-900 mb-2 leading-tight">{selectedProduct.title}</h3>
+                  <p className="text-gray-500 text-sm leading-relaxed mb-6 font-medium">{selectedProduct.description}</p>
+                  
+                  <div className="mt-auto space-y-6">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Quantity</label>
+                      <input type="number" min="1" value={orderQty} onChange={(e) => setOrderQty(Math.max(1, parseInt(e.target.value)))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold focus:ring-4 focus:ring-indigo-100 outline-none transition-all" />
+                    </div>
+                    
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Custom Notes (Optional)</label>
+                      <textarea value={orderNote} onChange={(e) => setOrderNote(e.target.value)} rows={2} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold focus:ring-4 focus:ring-indigo-100 outline-none transition-all resize-none" placeholder="Any specific instructions..." />
+                    </div>
+
+                    <div className="bg-indigo-50/50 p-6 rounded-[24px] border border-indigo-100 flex flex-col items-center text-center">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-1">Total Amount</span>
+                      <span className="text-4xl font-black text-indigo-600">₹{selectedProduct.price * orderQty}</span>
+                      <div className="text-[10px] text-indigo-400 font-bold uppercase mt-2 tracking-widest flex items-center gap-1">
+                        <Clock className="h-3 w-3" /> Ready in approx. {selectedProduct.durationHours * orderQty} Hours
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      <button onClick={closeOrderModal} className="py-4 text-xs font-black text-gray-400 uppercase tracking-widest hover:bg-gray-100 rounded-2xl transition-all">Cancel</button>
+                      <button onClick={submitOrder} disabled={isSubmitting} className="py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70">
+                        {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Placing...</> : 'Confirm Order'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <button onClick={() => setSelectedProduct(null)} className="py-4 text-xs font-black text-gray-400 uppercase tracking-widest hover:bg-gray-100 rounded-2xl transition-all">Cancel</button>
-                  <button onClick={submitOrder} className="py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">Confirm Order</button>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
       )}

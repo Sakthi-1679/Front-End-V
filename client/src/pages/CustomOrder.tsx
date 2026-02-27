@@ -4,13 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { placeCustomOrder, getAdminContact } from '../services/storage';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Calendar, Clock, User as UserIcon, Phone, FileText, X, Loader2 } from 'lucide-react';
+import { Upload, Calendar, Clock, User as UserIcon, Phone, FileText, X, Loader2, CheckCircle2, Mail, MailX } from 'lucide-react';
 
 export const CustomOrderForm: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useNotification();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState<{ adminPhone: string; emailSent: boolean | undefined } | null>(null);
   const [formData, setFormData] = useState({
     description: '',
     requestedDate: '',
@@ -60,14 +61,13 @@ export const CustomOrderForm: React.FC = () => {
 
     setLoading(true);
     try {
-      await placeCustomOrder({
+      const result = await placeCustomOrder({
         userId: user!.id,
         ...formData,
         images: images 
       });
       const adminPhone = await getAdminContact();
-      notify(`Custom request submitted! Support: ${adminPhone}`, "success");
-      navigate('/history');
+      setSubmitted({ adminPhone, emailSent: result.emailSent });
     } catch (err: any) {
       notify(`Submission failed: ${err.message}`, "error");
     } finally {
@@ -87,6 +87,54 @@ export const CustomOrderForm: React.FC = () => {
         </p>
       </div>
 
+      {submitted ? (
+        /* ── Submission Success Screen ── */
+        <div className="p-8 sm:p-12 flex flex-col items-center text-center gap-6">
+          <div className="h-20 w-20 bg-green-50 rounded-full flex items-center justify-center shadow-inner">
+            <CheckCircle2 className="h-10 w-10 text-green-500" />
+          </div>
+          <div>
+            <h3 className="text-2xl font-black text-gray-900 mb-1">Request Submitted!</h3>
+            <p className="text-gray-400 text-sm font-bold">We will call you within 2 hours to confirm.</p>
+          </div>
+
+          {/* Email status badge */}
+          {submitted.emailSent === true && (
+            <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 px-5 py-3 rounded-2xl w-full justify-center">
+              <Mail className="h-5 w-5 flex-shrink-0" />
+              <div className="text-left">
+                <p className="text-xs font-black uppercase tracking-wider">Confirmation Email Sent</p>
+                <p className="text-[10px] font-bold text-green-500 mt-0.5">{user?.email}</p>
+              </div>
+            </div>
+          )}
+          {submitted.emailSent === false && (
+            <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 text-yellow-700 px-5 py-3 rounded-2xl w-full justify-center">
+              <MailX className="h-5 w-5 flex-shrink-0" />
+              <div className="text-left">
+                <p className="text-xs font-black uppercase tracking-wider">Email Could Not Be Sent</p>
+                <p className="text-[10px] font-bold text-yellow-500 mt-0.5">Please contact us directly</p>
+              </div>
+            </div>
+          )}
+          {submitted.emailSent === undefined && (
+            <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 text-indigo-600 px-5 py-3 rounded-2xl w-full justify-center">
+              <Mail className="h-5 w-5 flex-shrink-0" />
+              <div className="text-left">
+                <p className="text-xs font-black uppercase tracking-wider">Confirmation Email Queued</p>
+                <p className="text-[10px] font-bold text-indigo-400 mt-0.5">{user?.email}</p>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+            Support: <span className="text-gray-700">{submitted.adminPhone}</span>
+          </p>
+          <button onClick={() => navigate('/history')} className="w-full bg-gray-900 text-white font-black py-4 rounded-[24px] shadow-xl hover:bg-black transition-all active:scale-95 uppercase tracking-widest text-xs">
+            View My Orders
+          </button>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="p-8 sm:p-12 space-y-8">
         
         {/* Reference Images */}
@@ -181,6 +229,7 @@ export const CustomOrderForm: React.FC = () => {
         </div>
 
       </form>
+      )}
     </div>
   );
 };
