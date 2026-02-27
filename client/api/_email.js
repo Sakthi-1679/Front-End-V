@@ -1,6 +1,6 @@
 // api/_email.js – Brevo email helper for Vercel serverless functions.
 // process.env.BREVO_API_KEY is set via the Vercel dashboard environment variables.
-import Brevo from '@getbrevo/brevo';
+import * as Brevo from '@getbrevo/brevo';
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const ADMIN_EMAIL   = process.env.ADMIN_EMAIL || 'vkmflowerskpm@gmail.com';
@@ -10,7 +10,7 @@ const ADMIN_EMAIL   = process.env.ADMIN_EMAIL || 'vkmflowerskpm@gmail.com';
  * @returns {{ ok: boolean, account?: object, error?: string }}
  */
 export async function checkBrevoConnection() {
-  if (!BREVO_API_KEY || BREVO_API_KEY === 'your_brevo_api_key_here') {
+  if (!BREVO_API_KEY) {
     return { ok: false, error: 'BREVO_API_KEY is not configured' };
   }
   try {
@@ -28,7 +28,7 @@ export async function checkBrevoConnection() {
  * @returns {{ sent: boolean, error?: string }}
  */
 async function sendAdminAlert({ subject, htmlContent }) {
-  if (!BREVO_API_KEY || BREVO_API_KEY === 'your_brevo_api_key_here') {
+  if (!BREVO_API_KEY) {
     console.warn('[email] BREVO_API_KEY not set – skipping email');
     return { sent: false, error: 'BREVO_API_KEY not configured' };
   }

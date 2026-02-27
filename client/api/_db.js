@@ -1,54 +1,29 @@
-// api/_db.js – shared JSON file storage in /tmp (persists within a warm Vercel invocation)
-// NOTE: /tmp is ephemeral across cold starts. For production, replace with a real database.
-import fs from 'fs';
-import path from 'path';
-import bcrypt from 'bcryptjs';
+// api/_db.js – MySQL connection pool for Vercel serverless functions.
+// Uses the same env vars and SSL logic as the new-Web backend.
+import mysql from 'mysql2/promise';
 
-const DATA_DIR = '/tmp/vkm-data';
+let pool = null;
 
-function seedAdmin() {
-  const usersFile = path.join(DATA_DIR, 'users.json');
-  if (!fs.existsSync(usersFile)) {
-    const hashed = bcrypt.hashSync('vkm@admin', 10);
-    fs.writeFileSync(usersFile, JSON.stringify([{
-      id: 'admin-001',
-      name: 'VKM Admin',
-      email: 'vkmflowerskpm@gmail.com',
-      password: hashed,
-      phone: '9999999999',
-      city: 'Kanchipuram',
-      area: 'Main',
-      role: 'ADMIN',
-    }], null, 2));
+export function getDB() {
+  if (pool) return pool;
+  const config = {
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'vkm_flower_shop',
+    waitForConnections: true,
+    connectionLimit: process.env.DB_POOL_LIMIT ? Number(process.env.DB_POOL_LIMIT) : 5,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+  };
+  if (
+    process.env.DB_SSL === 'true' ||
+    (process.env.DB_HOST && process.env.DB_HOST.includes('aivencloud.com'))
+  ) {
+    config.ssl = { rejectUnauthorized: false };
   }
-}
-
-function ensureDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  seedAdmin();
-}
-
-function filePath(name) {
-  return path.join(DATA_DIR, `${name}.json`);
-}
-
-export function read(name) {
-  ensureDir();
-  try { return JSON.parse(fs.readFileSync(filePath(name), 'utf8')); }
-  catch { return name === 'settings' ? {} : []; }
-}
-
-export function readOne(name) {
-  ensureDir();
-  try { return JSON.parse(fs.readFileSync(filePath(name), 'utf8')); }
-  catch { return {}; }
-}
-
-export function write(name, data) {
-  ensureDir();
-  fs.writeFileSync(filePath(name), JSON.stringify(data, null, 2));
-}
-
-export function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 9) + Math.random().toString(36).slice(2, 5);
+  pool = mysql.createPool(config);
+  return pool;
 }
