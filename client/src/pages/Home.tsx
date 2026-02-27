@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Product, UserRole } from '../types';
-import { getProducts, placeOrder, getAdminContact } from '../services/storage';
+import { getProducts, placeOrder, getAdminContact, ADMIN_EMAIL } from '../services/storage';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { Search, ShoppingCart, Clock, Info, ShieldAlert, Loader2, Flower, ChevronLeft, ChevronRight, X, CheckCircle2, Mail, MailX } from 'lucide-react';
@@ -204,8 +204,8 @@ export const Home: React.FC = () => {
                   <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 px-5 py-3 rounded-2xl w-full justify-center">
                     <Mail className="h-5 w-5 flex-shrink-0" />
                     <div className="text-left">
-                      <p className="text-xs font-black uppercase tracking-wider">Confirmation Email Sent</p>
-                      <p className="text-[10px] font-bold text-green-500 mt-0.5">{user?.email}</p>
+                      <p className="text-xs font-black uppercase tracking-wider">Order Alert Sent to Admin</p>
+                      <p className="text-[10px] font-bold text-green-500 mt-0.5">{ADMIN_EMAIL}</p>
                     </div>
                   </div>
                 )}
@@ -213,8 +213,8 @@ export const Home: React.FC = () => {
                   <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 text-yellow-700 px-5 py-3 rounded-2xl w-full justify-center">
                     <MailX className="h-5 w-5 flex-shrink-0" />
                     <div className="text-left">
-                      <p className="text-xs font-black uppercase tracking-wider">Email Could Not Be Sent</p>
-                      <p className="text-[10px] font-bold text-yellow-500 mt-0.5">Please contact us directly</p>
+                      <p className="text-xs font-black uppercase tracking-wider">Admin Alert Email Failed</p>
+                      <p className="text-[10px] font-bold text-yellow-500 mt-0.5">Admin will be notified via the dashboard</p>
                     </div>
                   </div>
                 )}
@@ -222,8 +222,8 @@ export const Home: React.FC = () => {
                   <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 text-indigo-600 px-5 py-3 rounded-2xl w-full justify-center">
                     <Mail className="h-5 w-5 flex-shrink-0" />
                     <div className="text-left">
-                      <p className="text-xs font-black uppercase tracking-wider">Confirmation Email Queued</p>
-                      <p className="text-[10px] font-bold text-indigo-400 mt-0.5">{user?.email}</p>
+                      <p className="text-xs font-black uppercase tracking-wider">Order Alert Queued for Admin</p>
+                      <p className="text-[10px] font-bold text-indigo-400 mt-0.5">{ADMIN_EMAIL}</p>
                     </div>
                   </div>
                 )}

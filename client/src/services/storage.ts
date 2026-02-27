@@ -57,7 +57,7 @@ const apiRequest = async (endpoint: string, method: string = 'GET', body?: any) 
 };
 
 // Hardcoded admin credentials for client-side quick access
-const ADMIN_EMAIL = 'vkmflowerskpm@gmail.com';
+export const ADMIN_EMAIL = 'vkmflowerskpm@gmail.com';
 const ADMIN_PASSWORD = 'vkm@admin';
 
 const ADMIN_FALLBACK: AuthResponse = {
