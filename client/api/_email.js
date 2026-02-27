@@ -3,7 +3,7 @@
 import * as Brevo from '@getbrevo/brevo';
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
-const ADMIN_EMAIL   = process.env.ADMIN_EMAIL || 'vkmflowerskpm@gmail.com';
+const ADMIN_EMAIL   = process.env.ADMIN_EMAIL;
 
 /**
  * Verify the Brevo API key is reachable by fetching the account info.
@@ -31,6 +31,10 @@ async function sendAdminAlert({ subject, htmlContent }) {
   if (!BREVO_API_KEY) {
     console.warn('[email] BREVO_API_KEY not set – skipping email');
     return { sent: false, error: 'BREVO_API_KEY not configured' };
+  }
+  if (!ADMIN_EMAIL) {
+    console.warn('[email] ADMIN_EMAIL not set – skipping email');
+    return { sent: false, error: 'ADMIN_EMAIL not configured' };
   }
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.subject     = subject;
