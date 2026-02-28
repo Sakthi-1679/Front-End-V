@@ -682,6 +682,14 @@ export default app;
 if (!process.env.VERCEL) {
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
+
+    // Self-ping every 14 minutes to prevent Render free-tier spin-down
+    const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    setInterval(() => {
+      fetch(`${SELF_URL}/api/health`)
+        .then(() => console.log('🏓 Keep-alive ping sent'))
+        .catch(err => console.warn('⚠️ Keep-alive ping failed:', err.message));
+    }, 14 * 60 * 1000); // every 14 minutes
   });
 
   server.on('error', (err) => {
