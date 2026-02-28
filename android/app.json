@@ -19,10 +19,12 @@
         "backgroundColor": "#6366f1"
       },
       "package": "com.vkmflowers.app",
+      "enableProguardInRelease": true,
+      "enableShrinkResourcesInRelease": true,
       "permissions": [
-        "NOTIFICATIONS",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "android.permission.NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
       ]
     },
     "plugins": [
@@ -42,7 +44,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "REPLACE_WITH_YOUR_EAS_PROJECT_ID"
+        "projectId": "c3de478f-8235-465d-9dff-458fb4f93a81"
       }
     }
   }
