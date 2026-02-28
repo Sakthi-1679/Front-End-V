@@ -54,20 +54,24 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
 };
 
 export const setupNotificationListeners = () => {
-  // Received while app is foregrounded
-  const foregroundSub = Notifications.addNotificationReceivedListener(notification => {
-    console.log('Notification received (foreground):', notification);
-  });
+  try {
+    // Received while app is foregrounded
+    const foregroundSub = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notification received (foreground):', notification);
+    });
 
-  // User tapped on notification
-  const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
-    const data = response.notification.request.content.data as any;
-    console.log('Notification tapped, data:', data);
-    // Navigation handling can be added here via a navigation ref
-  });
+    // User tapped on notification
+    const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as any;
+      console.log('Notification tapped, data:', data);
+    });
 
-  return () => {
-    foregroundSub.remove();
-    responseSub.remove();
-  };
+    return () => {
+      try { foregroundSub.remove(); } catch {}
+      try { responseSub.remove(); } catch {}
+    };
+  } catch (e) {
+    console.warn('Could not set up notification listeners:', e);
+    return () => {};
+  }
 };

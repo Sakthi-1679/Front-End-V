@@ -22,12 +22,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     (async () => {
-      const session = await getSession();
-      if (session?.user && session?.token) {
-        setUser(session.user);
-        setToken(session.token);
+      try {
+        const session = await getSession();
+        if (session?.user && session?.token) {
+          setUser(session.user);
+          setToken(session.token);
+        }
+      } catch (e) {
+        console.warn('Session restore failed:', e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 

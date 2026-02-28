@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -20,7 +20,7 @@ export type RootStackParamList = {
   Signup: undefined;
 };
 
-const Stack = createStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
 const UserTabs = () => (
@@ -76,6 +76,9 @@ const AppNavigator = () => {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f3ff' }}>
         <ActivityIndicator size="large" color="#6366f1" />
+        <View style={{ marginTop: 16 }}>
+          {/* Loading splash - prevents blank screen */}
+        </View>
       </View>
     );
   }

@@ -4,14 +4,14 @@ import {
   ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { register } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
-type Nav = StackNavigationProp<RootStackParamList, 'Signup'>;
+type Nav = NativeStackNavigationProp<RootStackParamList, 'Signup'>;
 
 export default function SignupScreen() {
   const nav = useNavigation<Nav>();

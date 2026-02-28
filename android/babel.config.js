@@ -4,7 +4,6 @@ module.exports = function (api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      'react-native-reanimated/plugin',
       // Strip all console.* calls in production builds — reduces JS bundle size
       ...(isProd ? [['transform-remove-console', { exclude: [] }]] : []),
     ],
