@@ -345,7 +345,7 @@ router.post('/register', async (req, res) => {
       'INSERT INTO users (name, email, password, phone, city, area, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [name, email, hashedPassword, phone, city, area, 'USER']
     );
-    const user = { id: result.insertId.toString(), name, email, role: 'USER' };
+    const user = { id: result.insertId.toString(), name, email, phone: phone || '', city: city || 'Kanchipuram', area: area || '', role: 'USER' };
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });
     res.json({ user, token });
   } catch (err) {
