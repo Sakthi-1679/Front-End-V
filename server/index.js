@@ -684,7 +684,7 @@ if (!process.env.VERCEL) {
     console.log(`Server running on port ${PORT}`);
 
     // Self-ping every 14 minutes to prevent Render free-tier spin-down
-    const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    const SELF_URL = process.env.RENDER_EXTERNAL_URL || 'https://new-web-2o8n.onrender.com';
     setInterval(() => {
       fetch(`${SELF_URL}/api/health`)
         .then(() => console.log('🏓 Keep-alive ping sent'))
