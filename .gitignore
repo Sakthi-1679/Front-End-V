@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.production
+server/.env
+
+# Build outputs
+dist/
+build/
+client/dist/
+
+# Expo / React Native
+android/.expo/
+android/node_modules/
+android/.expo-shared/
+*.jks
+*.keystore
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Vercel
+.vercel
+
+node_modules/
+.env
+.expo/
+client/dist/

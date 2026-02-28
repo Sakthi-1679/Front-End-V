@@ -1,0 +1,710 @@
+
+import 'dotenv/config';
+import express from 'express';
+import mysql from 'mysql2/promise';
+import cors from 'cors';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import helmet from 'helmet';
+import { Expo } from 'expo-server-sdk';
+
+const expoClient = new Expo();
+
+const app = express();
+const router = express.Router(); // Create a router for API routes
+const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'vkm-default-secret';
+
+// Basic Logger
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+/**
+ * SECURITY MIDDLEWARE
+ */
+app.use(helmet()); 
+app.set('trust proxy', 1);
+
+// CORS Config
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  process.env.FRONTEND_URL 
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app') || origin.includes('localhost')) {
+      callback(null, true);
+    } else {
+      console.log("Blocked by CORS:", origin);
+      callback(null, true);
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Handle preflight requests explicitly
+app.options('*', cors());
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+/**
+ * DATABASE INITIALIZATION
+ */
+let pool;
+
+async function getDB() {
+  if (pool) return pool;
+
+  const dbConfig = {
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'vkm_flower_shop',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    enableKeepAlive: true, 
+    keepAliveInitialDelay: 0
+  };
+
+  if (process.env.DB_SSL === 'true' || (process.env.DB_HOST && process.env.DB_HOST.includes('aivencloud.com'))) {
+    dbConfig.ssl = { rejectUnauthorized: false };
+  }
+
+  pool = mysql.createPool(dbConfig);
+  // Boost sort buffer so ORDER BY on image-heavy tables works
+  pool.on('connection', (conn) => {
+    conn.query('SET SESSION sort_buffer_size = 8388608'); // 8 MB
+  });
+  return pool;
+}
+
+// Initialize tables
+async function initDB() {
+  try {
+    const db = await getDB();
+    const conn = await db.getConnection();
+    console.log("✅ Successfully connected to MySQL Database");
+    conn.release();
+
+    // 1. Users
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        phone VARCHAR(20),
+        city VARCHAR(100) DEFAULT 'Kanchipuram',
+        area VARCHAR(255),
+        role ENUM('USER', 'ADMIN') DEFAULT 'USER',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_email (email)
+      )
+    `);
+
+    // 2. Products
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        price DECIMAL(10, 2) NOT NULL,
+        duration_hours INT DEFAULT 24,
+        images JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 3. Orders
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        bill_id VARCHAR(50),
+        daily_sequence INT,
+        user_id INT,
+        product_id INT,
+        quantity INT DEFAULT 1,
+        total_price DECIMAL(10, 2),
+        description TEXT,
+        status ENUM('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED') DEFAULT 'PENDING',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expected_delivery_at TIMESTAMP NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_status (status),
+        INDEX idx_created_at (created_at),
+        INDEX idx_bill_id (bill_id)
+      )
+    `);
+
+    // 4. Custom Orders
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS custom_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT,
+        description TEXT,
+        requested_date DATE,
+        requested_time TIME,
+        contact_name VARCHAR(255),
+        contact_phone VARCHAR(20),
+        images JSON,
+        status ENUM('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED') DEFAULT 'PENDING',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        deadline_at TIMESTAMP NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // 5. Settings
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        key_name VARCHAR(50) UNIQUE,
+        value VARCHAR(255)
+      )
+    `);
+    // Seed default admin phone if not set
+    await db.query(
+      "INSERT INTO settings (key_name, value) VALUES ('admin_phone', '9999999999') ON DUPLICATE KEY UPDATE key_name = key_name"
+    );
+
+    // 6. Push Tokens
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS push_tokens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        token VARCHAR(500) NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_token (token),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // --- MIGRATIONS: add columns that may be missing from older tables ---
+    const migrations = [
+      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS expected_delivery_at TIMESTAMP NULL`,
+      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS bill_id VARCHAR(50) NULL`,
+      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS daily_sequence INT NULL`,
+      `ALTER TABLE custom_orders ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMP NULL`,
+    ];
+    for (const sql of migrations) {
+      try { await db.query(sql); } catch(e) { /* column may already exist in some MySQL versions */ }
+    }
+
+    // Seed/Update Admin
+    const adminEmail = 'ajith12vkm@gmail.com';
+    const hashedPassword = await bcrypt.hash('vkmajith@12', 10);
+    
+    // Check if admin exists
+    const [existing] = await db.query('SELECT * FROM users WHERE email = ?', [adminEmail]);
+    
+    if (existing.length === 0) {
+      console.log("⚙️  Seeding Admin Account...");
+      await db.query(
+        'INSERT INTO users (name, email, password, phone, city, area, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ['VKM Admin', adminEmail, hashedPassword, '9999999999', 'Kanchipuram', 'Headquarters', 'ADMIN']
+      );
+    } else {
+       // Force update password and role to ensure access
+       console.log("⚙️  Ensuring Admin Credentials & Role are correct...");
+       await db.query('UPDATE users SET password = ?, role = ? WHERE email = ?', [hashedPassword, 'ADMIN', adminEmail]);
+    }
+
+  } catch (err) {
+    console.error("❌ Critical Database Error:", err.message);
+  }
+}
+
+initDB();
+
+/**
+ * HELPERS
+ */
+const generateBillId = async (conn) => {
+  try {
+    const [rows] = await conn.query(
+      `SELECT MAX(daily_sequence) as max_seq FROM orders WHERE DATE(created_at) = CURDATE()`
+    );
+    const nextSeq = (rows[0].max_seq || 0) + 1;
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, ''); 
+    const billId = `VKM-${dateStr}-${String(nextSeq).padStart(3, '0')}`;
+    return { billId, nextSeq };
+  } catch (e) {
+    console.error("Error generating bill ID", e);
+    return { billId: `VKM-${Date.now()}`, nextSeq: 1 };
+  }
+};
+
+/**
+ * PUSH NOTIFICATION HELPERS
+ */
+const getAdminUserIds = async (db) => {
+  const [rows] = await db.query('SELECT id FROM users WHERE role = ?', ['ADMIN']);
+  return rows.map(r => r.id);
+};
+
+const sendPushNotifications = async (db, userIds, title, body, data = {}) => {
+  try {
+    if (!userIds || userIds.length === 0) return;
+    const placeholders = userIds.map(() => '?').join(',');
+    const [rows] = await db.query(
+      `SELECT token FROM push_tokens WHERE user_id IN (${placeholders})`,
+      userIds
+    );
+    const tokens = rows.map(r => r.token).filter(t => Expo.isExpoPushToken(t));
+    if (tokens.length === 0) return;
+
+    const messages = tokens.map(token => ({
+      to: token,
+      sound: 'default',
+      title,
+      body,
+      data,
+    }));
+
+    const chunks = expoClient.chunkPushNotifications(messages);
+    for (const chunk of chunks) {
+      try {
+        await expoClient.sendPushNotificationsAsync(chunk);
+      } catch (e) {
+        console.error('Push chunk error:', e.message);
+      }
+    }
+    console.log(`✅ Push sent to ${tokens.length} device(s): ${title}`);
+  } catch (err) {
+    console.error('Push notification error:', err.message);
+  }
+};
+
+/**
+ * AUTH MIDDLEWARES
+ */
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: "No token provided." });
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: "Invalid token." });
+    req.user = user;
+    next();
+  });
+};
+
+const isAdmin = (req, res, next) => {
+  if (req.user?.role !== 'ADMIN') return res.status(403).json({ error: "Admin only." });
+  next();
+};
+
+/**
+ * ROUTES (Defined on router, without /api prefix)
+ */
+router.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date() });
+});
+
+// -- PUSH TOKENS --
+router.post('/push-token', verifyToken, async (req, res) => {
+  try {
+    const db = await getDB();
+    const { token } = req.body;
+    if (!token || !Expo.isExpoPushToken(token)) {
+      return res.status(400).json({ error: 'Invalid Expo push token' });
+    }
+    await db.query(
+      'INSERT INTO push_tokens (user_id, token) VALUES (?, ?) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)',
+      [req.user.id, token]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Save push token error:', err.message);
+    res.status(500).json({ error: 'Failed to save push token' });
+  }
+});
+
+router.post('/register', async (req, res) => {
+  try {
+    const db = await getDB();
+    const { name, email, password, phone, city, area } = req.body;
+    
+    // Validation
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [result] = await db.query(
+      'INSERT INTO users (name, email, password, phone, city, area, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [name, email, hashedPassword, phone, city, area, 'USER']
+    );
+    const user = { id: result.insertId.toString(), name, email, role: 'USER' };
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ user, token });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Email already registered. Please login.' });
+    }
+    console.error("Registration Error:", err);
+    res.status(500).json({ error: 'Registration failed: ' + err.message }); 
+  }
+});
+
+router.post('/login', async (req, res) => {
+  try {
+    const db = await getDB();
+    const { email, password } = req.body;
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    if (rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+    const user = rows[0];
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (isMatch) {
+      const { password: _, ...safeUser } = user;
+      safeUser.id = safeUser.id.toString();
+      const token = jwt.sign(safeUser, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ user: safeUser, token });
+    } else {
+      res.status(401).json({ error: 'Invalid credentials' });
+    }
+  } catch (err) { 
+    console.error("Login Error:", err);
+    res.status(500).json({ error: 'Login failed: ' + err.message }); 
+  }
+});
+
+// -- PRODUCTS --
+router.get('/products', async (req, res) => {
+  try {
+    const db = await getDB();
+    const [rows] = await db.query('SELECT * FROM products ORDER BY id DESC');
+    res.json(rows.map(p => {
+      let images = [];
+      try {
+        images = typeof p.images === 'string' ? JSON.parse(p.images) : (p.images || []);
+      } catch (e) {
+        images = [];
+      }
+      return { 
+        ...p, 
+        id: p.id.toString(), 
+        images: Array.isArray(images) ? images : [],
+        durationHours: p.duration_hours
+      };
+    }));
+  } catch (err) { 
+    console.error("Fetch products error:", err);
+    res.json([]); 
+  }
+});
+
+router.post('/products', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const db = await getDB();
+    const { title, description, price, durationHours, images } = req.body;
+    const [result] = await db.query(
+      'INSERT INTO products (title, description, price, duration_hours, images) VALUES (?, ?, ?, ?, ?)',
+      [title, description, price, durationHours, JSON.stringify(images)]
+    );
+    res.json({ id: result.insertId.toString(), ...req.body });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/products/:id', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const db = await getDB();
+    const { title, description, price, durationHours, images } = req.body;
+    await db.query(
+      'UPDATE products SET title=?, description=?, price=?, duration_hours=?, images=? WHERE id=?',
+      [title, description, price, durationHours, JSON.stringify(images), req.params.id]
+    );
+    res.json({ success: true, id: req.params.id, ...req.body });
+  } catch (err) { 
+    console.error(err);
+    res.status(500).json({ error: 'Update failed' }); 
+  }
+});
+
+router.delete('/products/:id', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const db = await getDB();
+    await db.query('DELETE FROM products WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete' }); }
+});
+
+// -- ORDERS --
+router.get('/orders', verifyToken, async (req, res) => {
+  try {
+    const db = await getDB();
+    let query = `
+      SELECT o.*, u.name as userName, u.phone as userPhone, p.title as productTitle, p.images as productImages 
+      FROM orders o 
+      JOIN users u ON o.user_id = u.id 
+      LEFT JOIN products p ON o.product_id = p.id 
+      ORDER BY o.id DESC
+    `;
+    const [rows] = await db.query(query);
+    
+    const formatted = rows.map(r => {
+      let img = 'https://via.placeholder.com/150';
+      try {
+        const imgs = typeof r.productImages === 'string' ? JSON.parse(r.productImages) : (r.productImages || []);
+        if (Array.isArray(imgs) && imgs.length > 0) img = imgs[0];
+      } catch (e) {}
+
+      return {
+        id: r.id.toString(),
+        billId: r.bill_id || `ORD-${r.id}`, 
+        userId: r.user_id.toString(),
+        productId: r.product_id ? r.product_id.toString() : '0',
+        productTitle: r.productTitle || 'Deleted Product',
+        productImage: img,
+        quantity: r.quantity,
+        totalPrice: r.total_price,
+        description: r.description,
+        status: r.status,
+        createdAt: r.created_at,
+        expectedDeliveryAt: r.expected_delivery_at || r.created_at
+      };
+    });
+    res.json(formatted);
+  } catch (err) { 
+    console.error(err);
+    res.status(500).json({ error: err.message }); 
+  }
+});
+
+router.post('/orders', verifyToken, async (req, res) => {
+  try {
+    const db = await getDB();
+    const { userId, productId, quantity, description } = req.body;
+    
+    const [products] = await db.query('SELECT price FROM products WHERE id = ?', [productId]);
+    if (products.length === 0) return res.status(404).json({ error: 'Product not found' });
+    
+    const totalPrice = products[0].price * quantity;
+    const { billId, nextSeq } = await generateBillId(db);
+
+    const [result] = await db.query(
+      'INSERT INTO orders (bill_id, daily_sequence, user_id, product_id, quantity, total_price, description, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [billId, nextSeq, userId, productId, quantity, totalPrice, description, 'PENDING']
+    );
+
+    // Notify admins
+    try {
+      const adminIds = await getAdminUserIds(db);
+      const [prodRows] = await db.query('SELECT title FROM products WHERE id = ?', [productId]);
+      const [userRows] = await db.query('SELECT name FROM users WHERE id = ?', [userId]);
+      const userName = userRows[0]?.name || 'A customer';
+      const prodTitle = prodRows[0]?.title || 'a product';
+      await sendPushNotifications(db, adminIds,
+        '🌸 New Order – VKM Flowers',
+        `${userName} ordered ${prodTitle} ×${quantity} (₹${totalPrice})`,
+        { type: 'new_order', orderId: result.insertId.toString() }
+      );
+    } catch(e) { console.error('Order push error:', e.message); }
+
+    res.json({ id: result.insertId.toString(), billId, status: 'PENDING' });
+  } catch (err) { 
+    console.error(err);
+    res.status(500).json({ error: 'Order failed' }); 
+  }
+});
+
+router.put('/orders/:id/status', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const db = await getDB();
+    const { status } = req.body;
+    let extraSql = "";
+    if (status === 'CONFIRMED') {
+      extraSql = ", expected_delivery_at = DATE_ADD(NOW(), INTERVAL 24 HOUR)";
+    }
+    await db.query(`UPDATE orders SET status = ? ${extraSql} WHERE id = ?`, [status, req.params.id]);
+
+    // Notify the order's user
+    try {
+      const [orderRows] = await db.query('SELECT user_id FROM orders WHERE id = ?', [req.params.id]);
+      if (orderRows.length > 0) {
+        const msgs = { CONFIRMED: 'Your order has been confirmed! ✅', COMPLETED: 'Your order is ready for pickup! 🎉', CANCELLED: 'Your order has been cancelled. ❌' };
+        const msg = msgs[status] || `Your order status updated to: ${status}`;
+        await sendPushNotifications(db, [orderRows[0].user_id], '🌸 VKM Flowers – Order Update', msg, { type: 'order_update', orderId: req.params.id, status });
+      }
+    } catch(e) { console.error('Status push error:', e.message); }
+
+    res.json({ success: true });
+  } catch (err) { 
+    console.error("Update order status error:", err.message, err.sql);
+    res.status(500).json({ error: 'Update failed: ' + err.message }); 
+  }
+});
+
+router.delete('/orders/:id', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const db = await getDB();
+    await db.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
+});
+
+// -- CUSTOM ORDERS --
+router.get('/custom-orders', verifyToken, async (req, res) => {
+  try {
+    const db = await getDB();
+    const [rows] = await db.query(`
+      SELECT c.*, u.name as userName 
+      FROM custom_orders c 
+      JOIN users u ON c.user_id = u.id 
+      ORDER BY c.id DESC
+    `);
+    
+    const formatted = rows.map(r => ({
+      id: r.id.toString(),
+      userId: r.user_id.toString(),
+      description: r.description,
+      requestedDate: r.requested_date,
+      requestedTime: r.requested_time,
+      contactName: r.contact_name,
+      contactPhone: r.contact_phone,
+      images: typeof r.images === 'string' ? JSON.parse(r.images) : (r.images || []),
+      status: r.status,
+      createdAt: r.created_at,
+      deadlineAt: r.deadline_at || r.created_at
+    }));
+    res.json(formatted);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/custom-orders', verifyToken, async (req, res) => {
+  try {
+    const db = await getDB();
+    const { userId, description, requestedDate, requestedTime, contactName, contactPhone, images } = req.body;
+    const [result] = await db.query(
+      'INSERT INTO custom_orders (user_id, description, requested_date, requested_time, contact_name, contact_phone, images, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, description, requestedDate, requestedTime, contactName, contactPhone, JSON.stringify(images), 'PENDING']
+    );
+
+    // Notify admins
+    try {
+      const adminIds = await getAdminUserIds(db);
+      const [userRows] = await db.query('SELECT name FROM users WHERE id = ?', [userId]);
+      const userName = userRows[0]?.name || 'A customer';
+      await sendPushNotifications(db, adminIds,
+        '🎨 Custom Order – VKM Flowers',
+        `${userName} placed a custom flower order`,
+        { type: 'new_custom_order', orderId: result.insertId.toString() }
+      );
+    } catch(e) { console.error('Custom order push error:', e.message); }
+
+    res.json({ id: result.insertId.toString(), status: 'PENDING' });
+  } catch (err) { res.status(500).json({ error: 'Custom Order failed' }); }
+});
+
+router.put('/custom-orders/:id/status', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const db = await getDB();
+    const { status } = req.body;
+    let extraSql = "";
+    if (status === 'CONFIRMED') {
+       extraSql = ", deadline_at = DATE_ADD(NOW(), INTERVAL 48 HOUR)";
+    }
+    await db.query(`UPDATE custom_orders SET status = ? ${extraSql} WHERE id = ?`, [status, req.params.id]);
+
+    // Notify the custom order's user
+    try {
+      const [orderRows] = await db.query('SELECT user_id FROM custom_orders WHERE id = ?', [req.params.id]);
+      if (orderRows.length > 0) {
+        const msgs = { CONFIRMED: 'Your custom order is confirmed! ✅', COMPLETED: 'Your custom order is ready! 🎉', CANCELLED: 'Your custom order has been cancelled. ❌' };
+        const msg = msgs[status] || `Your custom order status updated to: ${status}`;
+        await sendPushNotifications(db, [orderRows[0].user_id], '🌸 VKM Flowers – Custom Order Update', msg, { type: 'custom_order_update', orderId: req.params.id, status });
+      }
+    } catch(e) { console.error('Custom status push error:', e.message); }
+
+    res.json({ success: true });
+  } catch (err) { 
+    console.error("Update custom order status error:", err.message, err.sql);
+    res.status(500).json({ error: 'Update failed: ' + err.message }); 
+  }
+});
+
+router.delete('/custom-orders/:id', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const db = await getDB();
+    await db.query('DELETE FROM custom_orders WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
+});
+
+// -- SETTINGS --
+router.get('/settings/contact', async (req, res) => {
+  try {
+    const db = await getDB();
+    const [rows] = await db.query("SELECT value FROM settings WHERE key_name = 'admin_phone'");
+    res.json({ phone: rows.length ? rows[0].value : '9999999999' });
+  } catch (err) { res.json({ phone: '9999999999' }); }
+});
+
+router.put('/settings/contact', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const db = await getDB();
+    const { phone } = req.body;
+    await db.query("INSERT INTO settings (key_name, value) VALUES ('admin_phone', ?) ON DUPLICATE KEY UPDATE value = ?", [phone, phone]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Update failed' }); }
+});
+
+// -- USERS --
+router.get('/users/:id', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const db = await getDB();
+    const [rows] = await db.query('SELECT id, name, email, phone, city, area, role FROM users WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const u = rows[0];
+    u.id = u.id.toString();
+    res.json(u);
+  } catch (err) { res.status(500).json({ error: 'Fetch failed' }); }
+});
+
+// Register routes
+app.use('/api', router);
+app.use('/', router); // Also handle requests without /api prefix
+
+// Export app for Vercel
+export default app;
+
+// Start server if not running in Vercel
+if (!process.env.VERCEL) {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${PORT} is already in use. Retrying in 3s...`);
+      setTimeout(() => {
+        server.close();
+        server.listen(PORT, '0.0.0.0');
+      }, 3000);
+    } else {
+      console.error('Server error:', err);
+    }
+  });
+
+  // Graceful shutdown
+  const shutdown = () => {
+    console.log('\n🛑 Shutting down server gracefully...');
+    server.close(() => {
+      console.log('✅ Server closed.');
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 5000);
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+}

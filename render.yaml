@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: vkm-flowers-api
+    env: node
+    region: singapore
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_HOST
+        sync: false        # Set in Render dashboard
+      - key: DB_PORT
+        value: 3306
+      - key: DB_USER
+        sync: false        # Set in Render dashboard
+      - key: DB_PASSWORD
+        sync: false        # Set in Render dashboard
+      - key: DB_NAME
+        value: vkm_flower_shop
+      - key: DB_SSL
+        value: "true"      # Enable for cloud MySQL (Aiven / Railway)
+      - key: FRONTEND_URL
+        sync: false        # e.g. https://vkm-flowers.vercel.app
