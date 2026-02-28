@@ -19,8 +19,6 @@
         "backgroundColor": "#6366f1"
       },
       "package": "com.vkmflowers.app",
-      "enableProguardInRelease": true,
-      "enableShrinkResourcesInRelease": true,
       "permissions": [
         "android.permission.NOTIFICATIONS",
         "android.permission.RECEIVE_BOOT_COMPLETED",
@@ -28,6 +26,16 @@
       ]
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "shrinkResources": true,
+            "minifyEnabled": true,
+            "enableProguardInRelease": true
+          }
+        }
+      ],
       [
         "expo-notifications",
         {
