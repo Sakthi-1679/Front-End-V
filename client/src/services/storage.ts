@@ -14,8 +14,8 @@ const getApiUrl = () => {
         return 'http://localhost:3001/api';
     }
 
-    // 3. Fallback to relative path (assumes same-origin hosting or proxy)
-    return '/api';
+    // 3. Fallback to Railway internal backend
+    return 'http://new-web.railway.internal/api';
 };
 
 const API_URL = getApiUrl();
