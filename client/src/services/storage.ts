@@ -14,7 +14,7 @@ const getApiUrl = () => {
         return 'http://localhost:3001/api';
     }
 
-    // 3. Fallback to relative path (assumes same-origin hosting or proxy)
+    // 3. Fallback to relative path (Vercel proxy or same-origin hosting)
     return '/api';
 };
 
