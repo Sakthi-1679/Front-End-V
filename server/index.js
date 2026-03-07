@@ -7,8 +7,30 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import helmet from 'helmet';
 import { Expo } from 'expo-server-sdk';
+import { GoogleAuth } from 'google-auth-library';
 
 const expoClient = new Expo();
+
+// FCM v1 setup (uses GOOGLE_APPLICATION_CREDENTIALS env var or FIREBASE_SERVICE_ACCOUNT JSON)
+let fcmAuth = null;
+let fcmProjectId = null;
+try {
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
+    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+    : null;
+  if (serviceAccount) {
+    fcmAuth = new GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+    });
+    fcmProjectId = serviceAccount.project_id;
+    console.log('\u2705 FCM initialized for project:', fcmProjectId);
+  } else {
+    console.log('\u26a0\ufe0f  FIREBASE_SERVICE_ACCOUNT not set \u2013 FCM notifications disabled');
+  }
+} catch (e) {
+  console.error('FCM init error:', e.message);
+}
 
 const app = express();
 const router = express.Router(); // Create a router for API routes
@@ -183,6 +205,7 @@ async function initDB() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
         token VARCHAR(500) NOT NULL,
+        token_type VARCHAR(10) DEFAULT 'expo',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY unique_token (token),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -195,6 +218,7 @@ async function initDB() {
       `ALTER TABLE orders ADD COLUMN IF NOT EXISTS bill_id VARCHAR(50) NULL`,
       `ALTER TABLE orders ADD COLUMN IF NOT EXISTS daily_sequence INT NULL`,
       `ALTER TABLE custom_orders ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMP NULL`,
+      `ALTER TABLE push_tokens ADD COLUMN IF NOT EXISTS token_type VARCHAR(10) DEFAULT 'expo'`,
     ];
     for (const sql of migrations) {
       try { await db.query(sql); } catch(e) { /* column may already exist in some MySQL versions */ }
@@ -257,29 +281,56 @@ const sendPushNotifications = async (db, userIds, title, body, data = {}) => {
     if (!userIds || userIds.length === 0) return;
     const placeholders = userIds.map(() => '?').join(',');
     const [rows] = await db.query(
-      `SELECT token FROM push_tokens WHERE user_id IN (${placeholders})`,
+      `SELECT token, token_type FROM push_tokens WHERE user_id IN (${placeholders})`,
       userIds
     );
-    const tokens = rows.map(r => r.token).filter(t => Expo.isExpoPushToken(t));
-    if (tokens.length === 0) return;
 
-    const messages = tokens.map(token => ({
-      to: token,
-      sound: 'default',
-      title,
-      body,
-      data,
-    }));
-
-    const chunks = expoClient.chunkPushNotifications(messages);
-    for (const chunk of chunks) {
-      try {
-        await expoClient.sendPushNotificationsAsync(chunk);
-      } catch (e) {
-        console.error('Push chunk error:', e.message);
+    // --- Expo tokens ---
+    const expoTokens = rows.filter(r => r.token_type === 'expo' && Expo.isExpoPushToken(r.token)).map(r => r.token);
+    if (expoTokens.length > 0) {
+      const messages = expoTokens.map(token => ({
+        to: token, sound: 'default', title, body, data,
+      }));
+      const chunks = expoClient.chunkPushNotifications(messages);
+      for (const chunk of chunks) {
+        try { await expoClient.sendPushNotificationsAsync(chunk); }
+        catch (e) { console.error('Expo push error:', e.message); }
       }
+      console.log(`✅ Expo push sent to ${expoTokens.length} device(s)`);
     }
-    console.log(`✅ Push sent to ${tokens.length} device(s): ${title}`);
+
+    // --- FCM tokens ---
+    const fcmTokens = rows.filter(r => r.token_type === 'fcm').map(r => r.token);
+    if (fcmTokens.length > 0 && fcmAuth && fcmProjectId) {
+      const client = await fcmAuth.getClient();
+      const accessToken = (await client.getAccessToken()).token;
+      for (const fcmToken of fcmTokens) {
+        try {
+          const resp = await fetch(
+            `https://fcm.googleapis.com/v1/projects/${fcmProjectId}/messages:send`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                message: {
+                  token: fcmToken,
+                  notification: { title, body },
+                  data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
+                },
+              }),
+            }
+          );
+          if (!resp.ok) {
+            const err = await resp.text();
+            console.error('FCM send error:', err);
+          }
+        } catch (e) { console.error('FCM push error:', e.message); }
+      }
+      console.log(`✅ FCM push sent to ${fcmTokens.length} device(s)`);
+    }
   } catch (err) {
     console.error('Push notification error:', err.message);
   }
@@ -315,13 +366,19 @@ router.get('/health', (req, res) => {
 router.post('/push-token', verifyToken, async (req, res) => {
   try {
     const db = await getDB();
-    const { token } = req.body;
-    if (!token || !Expo.isExpoPushToken(token)) {
+    const { token, type } = req.body;
+    const tokenType = type === 'fcm' ? 'fcm' : 'expo';
+
+    if (tokenType === 'expo' && !Expo.isExpoPushToken(token)) {
       return res.status(400).json({ error: 'Invalid Expo push token' });
     }
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
     await db.query(
-      'INSERT INTO push_tokens (user_id, token) VALUES (?, ?) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)',
-      [req.user.id, token]
+      'INSERT INTO push_tokens (user_id, token, token_type) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), token_type = VALUES(token_type)',
+      [req.user.id, token, tokenType]
     );
     res.json({ success: true });
   } catch (err) {
