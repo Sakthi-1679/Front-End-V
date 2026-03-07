@@ -76,7 +76,8 @@
             android:padding="8dp"
             android:contentDescription="Delete"
             android:clickable="true"
-            android:focusable="true" />
+            android:focusable="true"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Image thumbnails row (visible only when images exist) -->

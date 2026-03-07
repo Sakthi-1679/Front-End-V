@@ -88,8 +88,8 @@ class MyOrdersFragment : Fragment() {
     }
 
     private fun updateTabLabels() {
-        binding.btnOrders.text = "Orders (${orders.size})"
-        binding.btnCustom.text = "Custom (${customOrders.size})"
+        binding.btnOrders.text = "ஆர்டர்கள் (${orders.size})"
+        binding.btnCustom.text = "தனிப்பட்ட (${customOrders.size})"
     }
 
     private fun showTab(tab: String) {

@@ -444,6 +444,54 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// -- GOOGLE LOGIN --
+router.post('/google-login', async (req, res) => {
+  try {
+    const db = await getDB();
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).json({ error: 'idToken is required' });
+
+    // Verify Google ID token
+    const { OAuth2Client } = await import('google-auth-library');
+    const client = new OAuth2Client();
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: [], // Accept any audience (we trust the token itself)
+    });
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      return res.status(401).json({ error: 'Invalid Google token' });
+    }
+
+    const email = payload.email.toLowerCase();
+    const name = payload.name || email.split('@')[0];
+
+    // Check if user exists
+    const [existing] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    let user;
+    if (existing.length > 0) {
+      user = existing[0];
+    } else {
+      // Auto-register new Google users
+      const randomPass = await bcrypt.hash(Math.random().toString(36), 10);
+      const [result] = await db.query(
+        'INSERT INTO users (name, email, password, phone, city, area, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [name, email, randomPass, '', 'Kanchipuram', '', 'USER']
+      );
+      const [newUser] = await db.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
+      user = newUser[0];
+    }
+
+    const { password: _, ...safeUser } = user;
+    safeUser.id = safeUser.id.toString();
+    const token = jwt.sign(safeUser, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ user: safeUser, token });
+  } catch (err) {
+    console.error("Google Login Error:", err);
+    res.status(500).json({ error: 'Google login failed: ' + err.message });
+  }
+});
+
 // -- PRODUCTS --
 router.get('/products', async (req, res) => {
   try {

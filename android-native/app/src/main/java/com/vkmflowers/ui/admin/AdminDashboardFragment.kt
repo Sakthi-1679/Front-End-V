@@ -111,8 +111,8 @@ class AdminDashboardFragment : Fragment() {
     private fun updateBadges() {
         val pendingOrders = allOrders.count { it.status == OrderStatus.PENDING }
         val pendingCustom = allCustomOrders.count { it.status == OrderStatus.PENDING }
-        binding.btnOrders.text = if (pendingOrders > 0) "Orders ($pendingOrders)" else "Orders"
-        binding.btnCustom.text = if (pendingCustom > 0) "Custom ($pendingCustom)" else "Custom"
+        binding.btnOrders.text = if (pendingOrders > 0) "ஆர்டர்கள் ($pendingOrders)" else "ஆர்டர்கள்"
+        binding.btnCustom.text = if (pendingCustom > 0) "தனிப்பட்ட ($pendingCustom)" else "தனிப்பட்ட"
         binding.tvStats.text = buildString {
             if (pendingOrders > 0) append("$pendingOrders pending orders  ")
             if (pendingCustom > 0) append("$pendingCustom custom pending")

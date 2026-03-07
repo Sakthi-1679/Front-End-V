@@ -1,14 +1,24 @@
 package com.vkmflowers.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.google.firebase.messaging.FirebaseMessaging
+import com.vkmflowers.data.models.FcmTokenRequest
 import com.vkmflowers.data.network.ApiClient
 import com.vkmflowers.ui.auth.LoginActivity
 import com.vkmflowers.ui.main.MainActivity
 import com.vkmflowers.utils.SessionManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class SplashActivity : AppCompatActivity() {
 
@@ -19,6 +29,19 @@ class SplashActivity : AppCompatActivity() {
         // Wire token provider for Retrofit interceptor
         ApiClient.tokenProvider = { session.getToken() }
 
+        // Request notification permission on Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
+            }
+        }
+
+        // Register FCM token if user is logged in
+        if (session.isLoggedIn()) {
+            registerFcmToken()
+        }
+
         Handler(Looper.getMainLooper()).postDelayed({
             if (session.isLoggedIn()) {
                 startActivity(Intent(this, MainActivity::class.java))
@@ -27,5 +50,15 @@ class SplashActivity : AppCompatActivity() {
             }
             finish()
         }, 1000)
+    }
+
+    private fun registerFcmToken() {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    ApiClient.service.saveFcmToken(FcmTokenRequest(token))
+                } catch (_: Exception) { }
+            }
+        }
     }
 }

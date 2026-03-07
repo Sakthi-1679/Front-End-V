@@ -127,3 +127,12 @@ data class SuccessResponse(
 data class PushTokenRequest(
     val token: String
 )
+
+data class FcmTokenRequest(
+    val token: String,
+    val type: String = "fcm"
+)
+
+data class GoogleLoginRequest(
+    val idToken: String
+)

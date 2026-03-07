@@ -12,9 +12,15 @@ interface ApiService {
     @POST("register")
     suspend fun register(@Body body: RegisterRequest): AuthResponse
 
+    @POST("google-login")
+    suspend fun googleLogin(@Body body: GoogleLoginRequest): AuthResponse
+
     // ─── Push Token ──────────────────────────────────────────
     @POST("push-token")
     suspend fun savePushToken(@Body body: PushTokenRequest)
+
+    @POST("push-token")
+    suspend fun saveFcmToken(@Body body: FcmTokenRequest)
 
     // ─── Admin Contact ───────────────────────────────────────
     @GET("settings/contact")
