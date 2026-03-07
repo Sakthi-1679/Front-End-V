@@ -69,6 +69,12 @@ export const register = async (userData: any): Promise<AuthResponse> => {
   return data;
 };
 
+export const googleLogin = async (idToken: string): Promise<AuthResponse> => {
+  const data = await apiRequest('/google-login', 'POST', { idToken });
+  localStorage.setItem('vkm_session', JSON.stringify(data));
+  return data;
+};
+
 export const logout = () => { localStorage.removeItem('vkm_session'); };
 export const getCurrentSession = (): AuthResponse | null => {
   const session = localStorage.getItem('vkm_session');
