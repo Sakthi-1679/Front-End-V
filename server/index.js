@@ -213,16 +213,24 @@ async function initDB() {
     `);
 
     // --- MIGRATIONS: add columns that may be missing from older tables ---
-    const migrations = [
-      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS expected_delivery_at TIMESTAMP NULL`,
-      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS bill_id VARCHAR(50) NULL`,
-      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS daily_sequence INT NULL`,
-      `ALTER TABLE custom_orders ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMP NULL`,
-      `ALTER TABLE push_tokens ADD COLUMN IF NOT EXISTS token_type VARCHAR(10) DEFAULT 'expo'`,
-    ];
-    for (const sql of migrations) {
-      try { await db.query(sql); } catch(e) { /* column may already exist in some MySQL versions */ }
-    }
+    // Helper: check if column exists before adding (works on all MySQL versions)
+    const addColumnIfMissing = async (table, column, definition) => {
+      const [cols] = await db.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+        [table, column]
+      );
+      if (cols.length === 0) {
+        await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+        console.log(`✅ Added column ${table}.${column}`);
+      }
+    };
+    try {
+      await addColumnIfMissing('orders', 'expected_delivery_at', 'TIMESTAMP NULL');
+      await addColumnIfMissing('orders', 'bill_id', 'VARCHAR(50) NULL');
+      await addColumnIfMissing('orders', 'daily_sequence', 'INT NULL');
+      await addColumnIfMissing('custom_orders', 'deadline_at', 'TIMESTAMP NULL');
+      await addColumnIfMissing('push_tokens', 'token_type', "VARCHAR(10) DEFAULT 'expo'");
+    } catch(e) { console.error('Migration error:', e.message); }
 
     // Seed/Update Admin
     const adminEmail = 'ajith12vkm@gmail.com';

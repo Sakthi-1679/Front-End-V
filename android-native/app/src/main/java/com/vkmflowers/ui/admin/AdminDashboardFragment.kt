@@ -1,5 +1,9 @@
 package com.vkmflowers.ui.admin
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.util.Base64
 import android.view.LayoutInflater
@@ -9,6 +13,7 @@ import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -19,6 +24,7 @@ import com.vkmflowers.databinding.*
 import com.vkmflowers.utils.formatDate
 import com.vkmflowers.utils.formatPrice
 import com.vkmflowers.utils.getStatusColor
+import com.vkmflowers.fcm.VkmFirebaseMessagingService
 import com.vkmflowers.utils.snack
 import kotlinx.coroutines.launch
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +38,13 @@ class AdminDashboardFragment : Fragment() {
     private var allCustomOrders: List<CustomOrder> = emptyList()
     private var allProducts: List<Product> = emptyList()
     private var adminPhone: String = ""
+
+    // Auto-refresh when a new order notification arrives
+    private val orderReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (_binding != null) loadData()
+        }
+    }
 
     // Image picker for products
     private val selectedProductImages = mutableListOf<String>()
@@ -57,6 +70,9 @@ class AdminDashboardFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        LocalBroadcastManager.getInstance(requireContext())
+            .registerReceiver(orderReceiver, IntentFilter(VkmFirebaseMessagingService.ACTION_NEW_ORDER))
 
         binding.btnOrders.setOnClickListener { showTab("orders") }
         binding.btnCustom.setOnClickListener { showTab("custom") }
@@ -409,6 +425,8 @@ class AdminDashboardFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        LocalBroadcastManager.getInstance(requireContext())
+            .unregisterReceiver(orderReceiver)
         super.onDestroyView()
         _binding = null
     }

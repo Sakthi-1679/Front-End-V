@@ -1,5 +1,9 @@
 package com.vkmflowers.ui.orders
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -7,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.vkmflowers.data.models.CustomOrder
@@ -19,6 +24,7 @@ import com.vkmflowers.utils.SessionManager
 import com.vkmflowers.utils.formatDate
 import com.vkmflowers.utils.formatPrice
 import com.vkmflowers.utils.getStatusColor
+import com.vkmflowers.fcm.VkmFirebaseMessagingService
 import com.vkmflowers.utils.snack
 import kotlinx.coroutines.launch
 
@@ -28,6 +34,12 @@ class MyOrdersFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var session: SessionManager
 
+    private val orderReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (_binding != null) loadData()
+        }
+    }
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentMyOrdersBinding.inflate(inflater, container, false)
         return binding.root
@@ -36,6 +48,9 @@ class MyOrdersFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         session = SessionManager(requireContext())
+
+        LocalBroadcastManager.getInstance(requireContext())
+            .registerReceiver(orderReceiver, IntentFilter(VkmFirebaseMessagingService.ACTION_NEW_ORDER))
 
         binding.btnOrders.setOnClickListener { showTab("orders") }
         binding.btnCustom.setOnClickListener { showTab("custom") }
@@ -174,6 +189,8 @@ class MyOrdersFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        LocalBroadcastManager.getInstance(requireContext())
+            .unregisterReceiver(orderReceiver)
         super.onDestroyView()
         _binding = null
     }
