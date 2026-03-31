@@ -23,6 +23,7 @@ export const AdminDashboard: React.FC = () => {
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [pendingCustomCount, setPendingCustomCount] = useState(0);
   const [adminPhone, setAdminPhone] = useState('');
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   const { notify, confirm } = useNotification();
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -428,7 +429,7 @@ export const AdminDashboard: React.FC = () => {
               {products.map(p => (
                 <div key={p.id} className="bg-white rounded-[24px] sm:rounded-[32px] shadow-sm hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-100 group flex flex-col h-full">
                   <div className="relative h-48 sm:h-64 bg-gray-100 overflow-hidden">
-                    <img src={p.images[0]} alt={p.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+                    <img src={p.images && p.images.length > 0 ? p.images[0] : 'https://images.unsplash.com/photo-1522673607200-164883524354?auto=format&fit=crop&q=80&w=800'} alt={p.title} className="w-full h-full object-cover cursor-pointer" onClick={() => { const src = p.images && p.images.length > 0 ? p.images[0] : null; if (src) setLightboxImage(src); }} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end p-4 sm:p-6 gap-2">
                        <button onClick={(e) => { e.stopPropagation(); startEditProduct(p); }} className="bg-white/95 backdrop-blur-md text-gray-900 flex-1 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-white transition-all uppercase tracking-widest text-[9px] sm:text-[10px] shadow-xl">
                           <Pencil className="h-4 w-4 sm:h-5 sm:w-5" /> Edit
@@ -557,6 +558,15 @@ export const AdminDashboard: React.FC = () => {
                     <button onClick={() => setSelectedUser(null)} className="w-full bg-gray-900 text-white font-black py-4 sm:py-6 rounded-[24px] sm:rounded-[32px] hover:bg-black transition-all shadow-2xl shadow-gray-200 mt-4 sm:mt-8 active:scale-[0.96] uppercase tracking-[0.2em] text-[10px]">Close</button>
                 </div>
             </div>
+        </div>
+      )}
+
+      {lightboxImage && (
+        <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in" onClick={() => setLightboxImage(null)}>
+          <button className="absolute top-4 right-4 text-white hover:text-gray-300 z-10">
+            <X className="h-8 w-8" />
+          </button>
+          <img src={lightboxImage} alt="Full size" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
